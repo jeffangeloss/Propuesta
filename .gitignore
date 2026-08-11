@@ -25,3 +25,6 @@ vs_Community.exe
 !.vscode/extensions.json
 art/build_html.bat
 art/build_html-debug.bat
+
+### Tesis — entorno Python de la captura biometrica
+tesis/bio/.venv/
