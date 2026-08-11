@@ -1235,6 +1235,9 @@ class PlayState extends MusicBeatState
 	{
 		startingSong = false;
 
+		// TESIS: abre el CSV del bloque
+		if(!cpuControlled) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate);
+
 		@:privateAccess
 		FlxG.sound.playMusic(inst._sound, 1, false);
 		#if FLX_PITCH FlxG.sound.music.pitch = playbackRate; #end
@@ -1601,6 +1604,10 @@ class PlayState extends MusicBeatState
 			FlxTween.globalManager.forEach(function(twn:FlxTween) if(!twn.finished) twn.active = true);
 
 			paused = false;
+
+			// TESIS: cierra el hueco abierto por la pausa
+			if(!cpuControlled) Telemetry.logResume(Conductor.songPosition, combo, songScore, health);
+
 			callOnScripts('onResume');
 			resetRPC(startTimer != null && startTimer.finished);
 		}
@@ -1697,7 +1704,9 @@ class PlayState extends MusicBeatState
 			botplayTxt.alpha = 1 - Math.sin((Math.PI * botplaySine) / 180);
 		}
 
-		if (controls.PAUSE && startedCountdown && canPause)
+		// TESIS: en modo experimento la pausa queda bloqueada — pausar rompe la correspondencia
+		// entre reloj de pared (biometría) y tiempo de canción (telemetría).
+		if (controls.PAUSE && startedCountdown && canPause && !Telemetry.experimentMode)
 		{
 			var ret:Dynamic = callOnScripts('onPause', null, true);
 			if(ret != LuaUtils.Function_Stop) {
@@ -1892,6 +1901,11 @@ class PlayState extends MusicBeatState
 	function set_health(value:Float):Float // You can alter how icon animations work here
 	{
 		value = FlxMath.roundDecimal(value, 5); //Fix Float imprecision
+
+		// TESIS: salida del estado de fracaso. Con histéresis: hace falta recuperarse por encima
+		// de RECOVERY_THRESHOLD para que un cruce posterior cuente como episodio nuevo.
+		if (Telemetry.inFailure && value > Telemetry.RECOVERY_THRESHOLD)
+			Telemetry.logFailureRecovered(Conductor.songPosition, combo, songScore, value);
 		if(!iconsAnimations || healthBar == null || !healthBar.enabled || healthBar.valueFunction == null)
 		{
 			health = value;
@@ -1914,6 +1928,9 @@ class PlayState extends MusicBeatState
 		persistentUpdate = false;
 		persistentDraw = true;
 		paused = true;
+
+		// TESIS: marca el inicio del hueco entre reloj de pared y tiempo de canción
+		if(!cpuControlled) Telemetry.logPause(Conductor.songPosition, combo, songScore, health);
 
 		if(FlxG.sound.music != null) {
 			FlxG.sound.music.pause();
@@ -1980,6 +1997,19 @@ class PlayState extends MusicBeatState
 	public var isDead:Bool = false; //Don't mess with this on Lua!!!
 	public var gameOverTimer:FlxTimer;
 	function doDeathCheck(?skipHealthCheck:Bool = false) {
+		// TESIS: en modo experimento el bloque nunca se corta. Se registra el cruce del umbral
+		// de fracaso y se le pone piso a la vida, para que la exposición sea igual entre condiciones
+		// y las ventanas de HRV queden completas. La barra queda visualmente vacía: la presión
+		// percibida se mantiene.
+		if (Telemetry.experimentMode && health <= 0 && !isDead)
+		{
+			// Solo se registra la ENTRADA al estado de fracaso, no cada golpe estando dentro.
+			if (!Telemetry.inFailure)
+				Telemetry.logFailureThreshold(Conductor.songPosition, combo, songScore, health);
+			health = Telemetry.HEALTH_FLOOR;
+			return false;
+		}
+
 		if (((skipHealthCheck && instakillOnMiss) || health <= 0) && !practiceMode && !isDead && gameOverTimer == null)
 		{
 			var ret:Dynamic = callOnScripts('onGameOver', null, true);
@@ -2396,6 +2426,9 @@ class PlayState extends MusicBeatState
 	public var transitioning = false;
 	public function endSong()
 	{
+		// TESIS: cierra el CSV del bloque
+		Telemetry.endBlock(Conductor.songPosition, songHits, songMisses, songScore, ratingPercent, health);
+
 		//Should kill you if you tried to cheat
 		if(!startingSong)
 		{
@@ -2547,6 +2580,10 @@ class PlayState extends MusicBeatState
 
 	private function popUpScore(note:Note = null):Void
 	{
+		// TESIS: error de timing CON SIGNO, capturado antes del Math.abs().
+		// negativo = adelantado, positivo = atrasado (convención estándar de sincronización sensoriomotora).
+		var signedNoteDiff:Float = -(note.strumTime - Conductor.songPosition + ClientPrefs.data.ratingOffset);
+
 		var noteDiff:Float = Math.abs(note.strumTime - Conductor.songPosition + ClientPrefs.data.ratingOffset);
 		vocals.volume = 1;
 
@@ -2586,6 +2623,10 @@ class PlayState extends MusicBeatState
 				RecalculateRating(false);
 			}
 		}
+
+		// TESIS: registro del acierto
+		if(!cpuControlled)
+			Telemetry.logHit(Conductor.songPosition, note.noteData, daRating.name, signedNoteDiff, combo, songScore, health, note.isSustainNote);
 
 		var uiFolder:String = "";
 		var antialias:Bool = ClientPrefs.data.antialiasing;
@@ -2744,7 +2785,9 @@ class PlayState extends MusicBeatState
 		}
 		else
 		{
-			if (ClientPrefs.data.ghostTapping)
+			// TESIS: segunda compuerta de ghostTapping. Sin esto, noteMissPress() ni siquiera
+			// se llama y las teclas pulsadas sin nota no dejan rastro.
+			if (ClientPrefs.data.ghostTapping && !Telemetry.experimentMode)
 				callOnScripts('onGhostTap', [key]);
 			else
 				noteMissPress(key);
@@ -2883,7 +2926,9 @@ class PlayState extends MusicBeatState
 
 	function noteMissPress(direction:Int = 1):Void //You pressed a key when there was no notes to press for this key
 	{
-		if(ClientPrefs.data.ghostTapping) return; //fuck it
+		// TESIS: en modo experimento las teclas pulsadas sin nota SÍ cuentan como error.
+		// No se toca ClientPrefs para no contaminar las preferencias guardadas.
+		if(ClientPrefs.data.ghostTapping && !Telemetry.experimentMode) return; //fuck it
 
 		noteMissCommon(direction);
 		FlxG.sound.play(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.1, 0.2));
@@ -2950,6 +2995,9 @@ class PlayState extends MusicBeatState
 		if(!endingSong) songMisses++;
 		totalPlayed++;
 		RecalculateRating(true);
+
+		// TESIS: registro del error. note == null significa tecla pulsada sin nota que acertar.
+		Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, note == null);
 
 		// play character anims
 		var char:Character = boyfriend;
