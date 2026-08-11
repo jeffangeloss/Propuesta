@@ -1,33 +1,37 @@
 /*
  * Nodo de captura biométrica — ESP32-D0WD-V3 (WROOM-32)
  *
- * Hito 2b: solo el MPU-6050. Es I2C, digital y no toca el ADC, así que permite validar
- * publicación, formato y golpes de sincronía sin pelear con ruido analógico.
- * ECG (AD8232) y GSR entran después; el pinout está reservado en el README.
- *
- * Publica en tesis/bio/imu lotes JSON con el mismo formato que simulador.py:
- *   {"seq":42,"t_us":1234567,"dt_us":20000,"ax":[...],"ay":[...],"az":[...]}
- *
- * Este archivo queda casi vacío a propósito: toda la lógica está en nodo.cpp.
- * La razón está explicada en nodo.h — resumen: el preprocesador de sketches necesita un
- * `ctags` que solo existe compilado para Intel, y en Apple Silicon sin Rosetta no corre.
+ * ┌───────────────────────────────────────────────────────────────────────────────────┐
+ * │  ESTE ARCHIVO DEBE QUEDARSE VACÍO. NO AGREGAR FUNCIONES AQUÍ.                      │
+ * │                                                                                    │
+ * │  arduino-cli preprocesa los .ino con `ctags` para insertar prototipos, y ese       │
+ * │  binario solo existe compilado para Intel. En Apple Silicon sin Rosetta hay que    │
+ * │  sustituirlo por universal-ctags, que genera posiciones distintas: los prototipos  │
+ * │  terminan insertados DENTRO de los cuerpos de función y, al perder el tipo de      │
+ * │  retorno, se convierten en LLAMADAS.                                               │
+ * │                                                                                    │
+ * │  Con setup() aquí, el preprocesador producía literalmente esto:                    │
+ * │                                                                                    │
+ * │      void setup() {                                                                │
+ * │        setup();      // <- recursion infinita                                      │
+ * │        loop();                                                                     │
+ * │        ...                                                                         │
+ * │      }                                                                             │
+ * │                                                                                    │
+ * │  Compilaba sin un solo error y la placa entraba en Guru Meditation (Double         │
+ * │  exception) por desbordamiento de pila, antes de imprimir nada.                    │
+ * │                                                                                    │
+ * │  Sin funciones en el .ino, ctags no encuentra nada que insertar y el problema      │
+ * │  desaparece. Los .cpp de la carpeta se compilan tal cual, sin preprocesar, así     │
+ * │  que TODO el código —incluidos setup() y loop()— vive en nodo.cpp.                 │
+ * └───────────────────────────────────────────────────────────────────────────────────┘
  *
  * Antes de compilar:  cp credenciales.ejemplo.h credenciales.h  y editarlo.
  *
- * Compilar y cargar:
  *   arduino-cli compile --fqbn esp32:esp32:esp32 tesis/bio/firmware
- *   arduino-cli upload  --fqbn esp32:esp32:esp32 -p /dev/cu.usbserial-110 tesis/bio/firmware
+ *   arduino-cli upload  --fqbn esp32:esp32:esp32:UploadSpeed=115200 \
+ *                       -p /dev/cu.usbserial-110 tesis/bio/firmware
  *
- * Monitor serie:
- *   arduino-cli monitor -p /dev/cu.usbserial-110 --config baudrate=115200
+ * Verificar que el preprocesador no ensució nada (debe salir vacío):
+ *   grep -nE '^\s+(setup|loop)\(\);' <build>/sketch/firmware.ino.cpp
  */
-
-#include "nodo.h"
-
-void setup() {
-  nodoSetup();
-}
-
-void loop() {
-  nodoLoop();
-}

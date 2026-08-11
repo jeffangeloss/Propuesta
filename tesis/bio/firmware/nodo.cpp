@@ -4,7 +4,6 @@
  */
 
 #include <Arduino.h>
-#include "nodo.h"
 #include <WiFi.h>
 #include <Wire.h>
 #include <PubSubClient.h>
@@ -143,7 +142,7 @@ static void publicarLote() {
 
 // ---------------------------------------------------------------- ciclo
 
-void nodoSetup() {
+void setup() {
   Serial.begin(115200);
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
@@ -166,7 +165,7 @@ void nodoSetup() {
   tSiguiente = micros();
 }
 
-void nodoLoop() {
+void loop() {
   if (WiFi.status() != WL_CONNECTED) { digitalWrite(PIN_LED, LOW); conectarWiFi(); }
   if (!mqtt.connected())             { digitalWrite(PIN_LED, LOW); conectarMQTT(); }
   mqtt.loop();
