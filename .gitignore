@@ -28,3 +28,5 @@ art/build_html-debug.bat
 
 ### Tesis — entorno Python de la captura biometrica
 tesis/bio/.venv/
+tesis/bio/firmware/credenciales.h
+tesis/bio/firmware/build/
