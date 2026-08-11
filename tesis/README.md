@@ -20,6 +20,7 @@ Diseño factorial mixto 2 × 2: formación musical (entre-sujetos) × condición
 
 | Archivo | Contenido |
 |---|---|
+| **[ESTADO.md](ESTADO.md)** | **Empezar por aquí.** Hito actual, qué sigue y qué está bloqueado |
 | [ESPECIFICACION-TELEMETRIA.md](ESPECIFICACION-TELEMETRIA.md) | Formato del CSV, eventos, convenciones y cálculo de variables |
 | [PROTOCOLO-MODO-EXPERIMENTO.md](PROTOCOLO-MODO-EXPERIMENTO.md) | Qué cambia en modo experimento y por qué |
 
