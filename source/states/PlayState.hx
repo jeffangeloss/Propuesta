@@ -1237,7 +1237,7 @@ class PlayState extends MusicBeatState
 		startingSong = false;
 
 		// TESIS: abre el CSV del bloque
-		if(!cpuControlled) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate);
+		if(!cpuControlled || Telemetry.pruebaAuto) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate);
 
 		@:privateAccess
 		FlxG.sound.playMusic(inst._sound, 1, false);
@@ -1277,6 +1277,7 @@ class PlayState extends MusicBeatState
 
 	private function generateSong():Void
 	{
+		Telemetry.loadSessionConfig(); // TESIS: la sesión se lee antes de armar el chart y del conteo
 		// FlxG.log.add(ChartParser.parse());
 		songSpeed = PlayState.SONG.speed;
 		songSpeedType = ClientPrefs.getGameplaySetting('scrolltype');
@@ -1794,6 +1795,10 @@ class PlayState extends MusicBeatState
 			trace("RESET = True");
 		}
 		doDeathCheck();
+
+		// TESIS: cuadros largos durante el bloque, para la prueba de imperceptibilidad
+		if (!startingSong && !paused && !endingSong && generatedMusic && elapsed / FlxG.timeScale * 1000 > Telemetry.CUADRO_LARGO_MS)
+			Telemetry.logCuadroLargo(Conductor.songPosition, elapsed / FlxG.timeScale * 1000);
 
 		if (unspawnNotes[0] != null)
 		{
@@ -2640,8 +2645,8 @@ class PlayState extends MusicBeatState
 		}
 
 		// TESIS: registro del acierto
-		if(!cpuControlled)
-			Telemetry.logHit(Conductor.songPosition, note.noteData, daRating.name, signedNoteDiff, combo, songScore, health, note.isSustainNote);
+		if(!cpuControlled || Telemetry.pruebaAuto)
+			Telemetry.logHit(Conductor.songPosition, note.noteData, daRating.name, signedNoteDiff, combo, songScore, health, note.isSustainNote, note);
 
 		var uiFolder:String = "";
 		var antialias:Bool = ClientPrefs.data.antialiasing;
@@ -2975,6 +2980,9 @@ class PlayState extends MusicBeatState
 				// i mean its fair :p -Crow
 				subtract *= note.tail.length + 1;
 				// i think it would be fair if damage multiplied based on how long the sustain is -[REDACTED]
+
+				// TESIS: el motor sale justo abajo sin llegar a logMiss; sin esto el fallo no se registraría
+				Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, false, note, true);
 			}
 
 			if (note.missed)
@@ -3012,7 +3020,7 @@ class PlayState extends MusicBeatState
 		RecalculateRating(true);
 
 		// TESIS: registro del error. note == null significa tecla pulsada sin nota que acertar.
-		Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, note == null);
+		Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, note == null, note);
 
 		// play character anims
 		var char:Character = boyfriend;

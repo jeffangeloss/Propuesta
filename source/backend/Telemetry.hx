@@ -1,5 +1,7 @@
 package backend;
 
+import objects.Note;
+
 #if sys
 import sys.io.File;
 import sys.io.FileOutput;
@@ -35,6 +37,18 @@ class Telemetry
 	 * Se activa poniendo `experimento=1` en sesion.txt. NO cambia las preferencias guardadas.
 	 */
 	public static var experimentMode:Bool = false;
+
+	/** TESIS: `prueba_auto=1` registra la telemetría también en modo automático (botplay), solo para pruebas. */
+	public static var pruebaAuto:Bool = false;
+
+	/** TESIS: `intercambio=1` activa el intercambio de versiones aunque no haya modo experimento. */
+	public static var intercambioForzado:Bool = false;
+
+	/** TESIS: líneas de cabecera que agrega el intercambio de versiones antes de abrir el bloque. */
+	public static var cabeceraExtra:Array<String> = [];
+
+	/** TESIS: un cuadro más largo que esto se registra como `cuadro_largo` (el doble de 60 cuadros por segundo). */
+	public static inline var CUADRO_LARGO_MS:Float = 33;
 
 	/**
 	 * Piso de vida en modo experimento. Positivo pero mínimo: la barra se ve vacía,
@@ -96,6 +110,8 @@ class Telemetry
 				return;
 			}
 
+			pruebaAuto = false;
+			intercambioForzado = false;
 			for (line in StringTools.replace(File.getContent(path), '\r', '').split('\n'))
 			{
 				var t:String = StringTools.trim(line);
@@ -109,6 +125,8 @@ class Telemetry
 					case 'participante': participantId = val;
 					case 'condicion': condition = val;
 					case 'experimento': experimentMode = (val == '1' || val.toLowerCase() == 'true');
+					case 'prueba_auto': pruebaAuto = (val == '1' || val.toLowerCase() == 'true');
+					case 'intercambio': intercambioForzado = (val == '1' || val.toLowerCase() == 'true');
 				}
 			}
 		}
@@ -173,26 +191,59 @@ class Telemetry
 		raw('# timing_error_ms: negativo=adelantado, positivo=atrasado');
 		raw('# ATENCION: si aparecen filas pause/resume, el reloj de pared y el tiempo de cancion');
 		raw('# dejan de corresponder a partir de ahi. Usar esas filas para reconstruir el desfase.');
-		raw('seq,unix_ms,song_time_ms,evento,direccion,juicio,timing_error_ms,combo,score,health,sustain');
+		raw('# version, segmento y nota_ms son de la NOTA (no de la version que suena al registrar la fila)');
+		for (linea in cabeceraExtra) raw(linea);
+		raw('seq,unix_ms,song_time_ms,evento,direccion,juicio,timing_error_ms,combo,score,health,sustain,version,segmento,nota_ms,detalle');
 
 		row('block_start', -1, '', null, 0, 0, 1.0, false, 0);
 		#end
 	}
 
 	public static function logHit(songTimeMs:Float, direction:Int, judgment:String, timingErrorMs:Float, combo:Int, score:Int, health:Float,
-			isSustain:Bool):Void
+			isSustain:Bool, ?note:Note):Void
 	{
 		#if sys
-		row('hit', direction, judgment, timingErrorMs, combo, score, health, isSustain, songTimeMs);
+		row('hit', direction, judgment, timingErrorMs, combo, score, health, isSustain, songTimeMs, versionDe(note), segmentoDe(note), notaMs(note));
 		#end
 	}
 
-	public static function logMiss(songTimeMs:Float, direction:Int, combo:Int, score:Int, health:Float, pressedWithoutNote:Bool):Void
+	/** TESIS: `sustain` = 1 marca el fallo de la cabeza de una nota larga (antes no se registraba). */
+	public static function logMiss(songTimeMs:Float, direction:Int, combo:Int, score:Int, health:Float, pressedWithoutNote:Bool, ?note:Note,
+			sustain:Bool = false):Void
 	{
 		#if sys
-		row(pressedWithoutNote ? 'miss_press' : 'miss', direction, '', null, combo, score, health, false, songTimeMs);
+		row(pressedWithoutNote ? 'miss_press' : 'miss', direction, '', null, combo, score, health, sustain, songTimeMs, versionDe(note), segmentoDe(note),
+			notaMs(note));
 		#end
 	}
+
+	/** TESIS: decisión aplicada al segmento que entra. `version` y `segmento` son los del segmento. */
+	public static function logDecision(songTimeMs:Float, version:String, segmento:Int, detalle:String, combo:Int, score:Int, health:Float):Void
+	{
+		#if sys
+		row('decision', -1, '', null, combo, score, health, false, songTimeMs, version, segmento, null, detalle);
+		#end
+	}
+
+	/** TESIS: la canción cruzó un corte; `version` es la que empieza a sonar. */
+	public static function logCorte(songTimeMs:Float, version:String, segmento:Int, combo:Int, score:Int, health:Float):Void
+	{
+		#if sys
+		row('chart_cut', -1, '', null, combo, score, health, false, songTimeMs, version, segmento);
+		#end
+	}
+
+	/** TESIS: cuadro más largo que CUADRO_LARGO_MS, para la prueba de imperceptibilidad. */
+	public static function logCuadroLargo(songTimeMs:Float, duracionMs:Float):Void
+	{
+		#if sys
+		row('cuadro_largo', -1, '', null, 0, 0, 0, false, songTimeMs, '', -1, null, 'duracion_ms=' + fmt(duracionMs));
+		#end
+	}
+
+	/** Nombre del bloque en curso: el nombre del CSV sin carpeta ni extensión. */
+	public static function bloqueActual():String
+		return currentFile == '' ? '' : haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(currentFile));
 
 	/** El reloj de pared sigue corriendo mientras el tiempo de canción se congela. */
 	public static function logPause(songTimeMs:Float, combo:Int, score:Int, health:Float):Void
@@ -265,7 +316,7 @@ class Telemetry
 	// ---------------------------------------------------------------- internos
 
 	static function row(evento:String, direccion:Int, juicio:String, timingErrorMs:Null<Float>, combo:Int, score:Int, health:Float, sustain:Bool,
-			songTimeMs:Float):Void
+			songTimeMs:Float, version:String = '', segmento:Int = -1, ?notaMs:Null<Float>, detalle:String = ''):Void
 	{
 		#if sys
 		if (out == null) return;
@@ -281,7 +332,11 @@ class Telemetry
 			+ ',' + combo
 			+ ',' + score
 			+ ',' + fmt(health)
-			+ ',' + (sustain ? '1' : '0'));
+			+ ',' + (sustain ? '1' : '0')
+			+ ',' + version
+			+ ',' + (segmento < 0 ? '' : Std.string(segmento))
+			+ ',' + (notaMs == null ? '' : fmt(notaMs))
+			+ ',' + detalle);
 		#end
 	}
 
@@ -300,6 +355,21 @@ class Telemetry
 		}
 		#end
 	}
+
+	static function versionDe(note:Note):String
+	{
+		if (note == null || !note.extraData.exists('version')) return '';
+		return Std.string(note.extraData.get('version'));
+	}
+
+	static function segmentoDe(note:Note):Int
+	{
+		if (note == null || !note.extraData.exists('segmento')) return -1;
+		return Std.int(note.extraData.get('segmento'));
+	}
+
+	static function notaMs(note:Note):Null<Float>
+		return note == null ? null : note.strumTime;
 
 	/** Tres decimales, sin notación científica ni comas decimales. */
 	static function fmt(v:Float):String
