@@ -157,6 +157,7 @@ class PlayState extends MusicBeatState
 
 	public var notes:FlxTypedGroup<Note>;
 	public var unspawnNotes:Array<Note> = [];
+	var notasFantasma:Int = 0; // TESIS: duplicados descartados por construirNotas
 	public var eventNotes:Array<EventNote> = [];
 
 	public var camFollow:FlxObject;
@@ -1335,8 +1336,26 @@ class PlayState extends MusicBeatState
 		}
 		catch(e:Dynamic) {}
 
+		// TESIS: el bucle original vive ahora en construirNotas, para armar también Fácil y Difícil
+		construirNotas(PlayState.SONG.notes, false, unspawnNotes);
+		trace('["${SONG.song.toUpperCase()}" CHART INFO]: Ghost Notes Cleared: $notasFantasma');
+		for (event in songData.events) //Event Notes
+			for (i in 0...event[1].length)
+				makeEvent(event, i);
+
+		unspawnNotes.sort(sortByTime);
+		generatedMusic = true;
+	}
+
+	/**
+	 * TESIS: cuerpo original de generateSong, sin cambios de lógica, parametrizado para que el
+	 * intercambio arme también las versiones Fácil y Difícil. Con `soloJugador` omite las notas del
+	 * rival. Los duplicados se buscan solo dentro de `destino`, es decir, dentro de cada versión.
+	 */
+	public function construirNotas(sectionsData:Array<SwagSection>, soloJugador:Bool, ?destino:Array<Note>):Array<Note>
+	{
+		if (destino == null) destino = [];
 		var oldNote:Note = null;
-		var sectionsData:Array<SwagSection> = PlayState.SONG.notes;
 		var ghostNotesCaught:Int = 0;
 		var daBpm:Float = Conductor.bpm;
 	
@@ -1356,20 +1375,21 @@ class PlayState extends MusicBeatState
 					holdLength = 0.0;
 
 				var gottaHitNote:Bool = (songNotes[1] < totalColumns);
+				if (soloJugador && !gottaHitNote) continue; // TESIS
 
 				if (i != 0) {
 					// CLEAR ANY POSSIBLE GHOST NOTES
-					for (evilNote in unspawnNotes) {
+					for (evilNote in destino) {
 						var matches: Bool = (noteColumn == evilNote.noteData && gottaHitNote == evilNote.mustPress && evilNote.noteType == noteType);
 						if (matches && Math.abs(spawnTime - evilNote.strumTime) < flixel.math.FlxMath.EPSILON) {
 							if (evilNote.tail.length > 0)
 								for (tail in evilNote.tail)
 								{
 									tail.destroy();
-									unspawnNotes.remove(tail);
+									destino.remove(tail);
 								}
 							evilNote.destroy();
-							unspawnNotes.remove(evilNote);
+							destino.remove(evilNote);
 							ghostNotesCaught++;
 							//continue;
 						}
@@ -1385,7 +1405,7 @@ class PlayState extends MusicBeatState
 				swagNote.noteType = noteType;
 	
 				swagNote.scrollFactor.set();
-				unspawnNotes.push(swagNote);
+				destino.push(swagNote);
 
 				var curStepCrochet:Float = 60 / daBpm * 1000 / 4.0;
 				final roundSus:Int = Math.round(swagNote.sustainLength / curStepCrochet);
@@ -1393,7 +1413,7 @@ class PlayState extends MusicBeatState
 				{
 					for (susNote in 0...roundSus)
 					{
-						oldNote = unspawnNotes[Std.int(unspawnNotes.length - 1)];
+						oldNote = destino[Std.int(destino.length - 1)];
 
 						var sustainNote:Note = new Note(spawnTime + (curStepCrochet * susNote), noteColumn, oldNote, true);
 						sustainNote.animSuffix = swagNote.animSuffix;
@@ -1402,7 +1422,7 @@ class PlayState extends MusicBeatState
 						sustainNote.noteType = swagNote.noteType;
 						sustainNote.scrollFactor.set();
 						sustainNote.parent = swagNote;
-						unspawnNotes.push(sustainNote);
+						destino.push(sustainNote);
 						swagNote.tail.push(sustainNote);
 
 						sustainNote.correctionOffset = swagNote.height / 2;
@@ -1452,13 +1472,8 @@ class PlayState extends MusicBeatState
 				oldNote = swagNote;
 			}
 		}
-		trace('["${SONG.song.toUpperCase()}" CHART INFO]: Ghost Notes Cleared: $ghostNotesCaught');
-		for (event in songData.events) //Event Notes
-			for (i in 0...event[1].length)
-				makeEvent(event, i);
-
-		unspawnNotes.sort(sortByTime);
-		generatedMusic = true;
+		notasFantasma += ghostNotesCaught;
+		return destino;
 	}
 
 	// called only once per different event (Used for precaching)
