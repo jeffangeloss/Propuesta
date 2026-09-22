@@ -5,6 +5,7 @@ import backend.StageData;
 import backend.WeekData;
 import backend.Song;
 import backend.Rating;
+import backend.Intercambio; // TESIS
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -158,6 +159,10 @@ class PlayState extends MusicBeatState
 	public var notes:FlxTypedGroup<Note>;
 	public var unspawnNotes:Array<Note> = [];
 	var notasFantasma:Int = 0; // TESIS: duplicados descartados por construirNotas
+
+	// TESIS: intercambio de versiones del chart en cortes de 8 compases
+	public var intercambio:Intercambio = null;
+	var errorIntercambio:String = null;
 	public var eventNotes:Array<EventNote> = [];
 
 	public var camFollow:FlxObject;
@@ -956,6 +961,22 @@ class PlayState extends MusicBeatState
 
 	public function startCountdown()
 	{
+		// TESIS: en modo experimento, sin las tres versiones válidas el bloque no empieza
+		if (errorIntercambio != null && Telemetry.experimentMode)
+		{
+			lime.app.Application.current.window.alert('No se puede iniciar el bloque: ' + errorIntercambio, 'FNF Motiv');
+			errorIntercambio = null;
+			persistentUpdate = false;
+			MusicBeatState.switchState(new FreeplayState());
+			return false;
+		}
+		// TESIS: fuera del modo experimento avisa el motivo y sigue con la versión única
+		if (errorIntercambio != null)
+		{
+			lime.app.Application.current.window.alert('El intercambio no se activó y la canción sigue con la versión única: ' + errorIntercambio, 'FNF Motiv');
+			errorIntercambio = null;
+		}
+
 		if(startedCountdown) {
 			callOnScripts('onStartCountdown');
 			return false;
@@ -1345,6 +1366,12 @@ class PlayState extends MusicBeatState
 				makeEvent(event, i);
 
 		unspawnNotes.sort(sortByTime);
+
+		// TESIS: intercambio de versiones del chart en cortes de 8 compases
+		intercambio = new Intercambio(this);
+		unspawnNotes = intercambio.preparar(songName, unspawnNotes);
+		errorIntercambio = intercambio.error;
+
 		generatedMusic = true;
 	}
 
@@ -1796,6 +1823,8 @@ class PlayState extends MusicBeatState
 		}
 		doDeathCheck();
 
+		// TESIS: entrega el segmento siguiente en su plazo y registra cada corte
+		if (intercambio != null && generatedMusic && !paused) intercambio.actualizar(Conductor.songPosition);
 		// TESIS: cuadros largos durante el bloque, para la prueba de imperceptibilidad
 		if (!startingSong && !paused && !endingSong && generatedMusic && elapsed / FlxG.timeScale * 1000 > Telemetry.CUADRO_LARGO_MS)
 			Telemetry.logCuadroLargo(Conductor.songPosition, elapsed / FlxG.timeScale * 1000);
@@ -3215,6 +3244,8 @@ class PlayState extends MusicBeatState
 	}
 
 	override function destroy() {
+		if (intercambio != null) intercambio.destruir(); // TESIS
+		Telemetry.closeBlock(); // TESIS: un bloque abandonado no queda abierto para la corrida siguiente
 		if (psychlua.CustomSubstate.instance != null)
 		{
 			closeSubState();

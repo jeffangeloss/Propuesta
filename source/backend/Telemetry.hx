@@ -243,7 +243,12 @@ class Telemetry
 
 	/** Nombre del bloque en curso: el nombre del CSV sin carpeta ni extensión. */
 	public static function bloqueActual():String
+	{
+		#if sys
+		if (out == null) return ''; // TESIS: sin bloque abierto no hay decisiones que validar
+		#end
 		return currentFile == '' ? '' : haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(currentFile));
+	}
 
 	/** El reloj de pared sigue corriendo mientras el tiempo de canción se congela. */
 	public static function logPause(songTimeMs:Float, combo:Int, score:Int, health:Float):Void
