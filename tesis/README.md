@@ -69,6 +69,16 @@ haxelib run lime build mac -DBASE_GAME_FILES   # desarrollo: incluye canciones d
 haxelib run lime build mac                     # sesiones: solo los charts propios
 ```
 
+En macOS 27 hay que agregar `-DMACOSX_VER=27.0` a los dos comandos. hxcpp 4.3.2 elige la versión
+del SDK leyendo la carpeta de SDKs y toma `MacOSX27.sdk`, que `xcrun` no reconoce como
+`macosx27`. Sin ese flag la compilación termina con `Could not create PCH`.
+
+Pruebas de la lógica del intercambio, sin abrir el juego:
+
+```bash
+./tesis/pruebas/correr_pruebas.sh
+```
+
 El flag va por línea de comandos y no en `Project.xml` a propósito. **El build de las sesiones
 no debe incluir las canciones del juego base**: si el participante entra a Freeplay y ve siete
 semanas de canciones puede elegir otra cosa o llegar con familiaridad previa a un tema, lo que

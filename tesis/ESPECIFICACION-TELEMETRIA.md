@@ -60,7 +60,11 @@ La última línea del archivo lleva el resumen del bloque:
 | `combo` | int | Combo después del evento |
 | `score` | int | Puntaje acumulado |
 | `health` | float | Vida, rango 0–2 |
-| `sustain` | 0/1 | Si la nota era sostenida |
+| `sustain` | 0/1 | En `miss`, 1 marca el fallo de la cabeza de una nota larga. En `hit` vale 0, porque el motor no juzga las piezas de las notas largas |
+| `version` | str | Versión del chart **de la nota** (`facil`, `media`, `dificil`). Vacío si el intercambio está apagado |
+| `segmento` | int | Segmento de 8 compases al que pertenece la nota. Vacío si el intercambio está apagado |
+| `nota_ms` | float | Momento en que la nota debía tocarse, en ms de canción (incluye `note_offset_ms`) |
+| `detalle` | str | Datos de los eventos `decision` y `cuadro_largo`, como `clave=valor` separados por `;` |
 
 ### Los dos relojes
 
@@ -101,12 +105,64 @@ real y no solo aciertos.
 | `pause` | Partida pausada. No debería aparecer en modo experimento |
 | `resume` | Partida reanudada. Solo se emite si hubo un `pause` previo |
 | `block_end` | Fin del bloque. Ausente si la sesión se interrumpió |
+| `decision` | Intercambio: el segmento siguiente entra a la fila de aparición. `version` y `segmento` son los del segmento que entra |
+| `chart_cut` | Intercambio: la canción cruza un corte. `version` es la que empieza a sonar |
+| `cuadro_largo` | Un cuadro duró más de 33 ms. `detalle` lleva `duracion_ms` |
 
 En las filas `hit`, `health` es el valor **en el instante del juicio**, antes de aplicar la
 ganancia de vida de esa misma nota.
 
 En las filas `failure_threshold`, `health` es el valor **antes** de aplicar el piso, así que
 puede ser ≤ 0. Registra la profundidad del cruce.
+
+---
+
+## Intercambio de versiones del chart
+
+Se activa en modo experimento, o con `intercambio=1` en `sesion.txt`. La canción necesita sus
+tres charts (`<cancion>-easy`, `<cancion>`, `<cancion>-hard`) y hay que elegir la dificultad
+Normal, porque la Media es el chart maestro: rival, eventos, cámara y velocidad salen de ella.
+
+Un corte cae al inicio de cada grupo de 8 secciones. Unos 2,25 s antes de cada corte (el plazo),
+el juego lee `decision.json` de la carpeta de telemetría, elige la versión del segmento siguiente
+y lo agrega a la fila de aparición antes de que alguna de sus notas llegue a la pantalla.
+
+```json
+{"bloque": "P01_adaptativa_roses_20260922-150000", "segmento": 3, "decision": "sube",
+ "seq": 17, "fuente": "simulado", "unix_ms": 1790108400123}
+```
+
+La decisión solo vale si `bloque` es el nombre del CSV en curso y `segmento` es el que entra.
+Si no, o si el archivo falta, la versión se mantiene y la fila `decision` dice
+`recibida=sin_decision`. Con `condicion=estatica` el juego toca Media siempre y registra la
+decisión sin aplicarla (`aplicada=0`).
+
+Cabecera que agrega el intercambio:
+
+```
+# modo_chart=intercambio
+# aplica_decisiones=1
+# version_inicial=media
+# compases_por_corte=8
+# cortes_ms=0;16000;32000;48000;64000;80000
+# plazos_ms=0;13750;29750;45750;61750;77750
+# aparicion_ms=2000
+# margen_ms=250
+# velocidad=1.3
+# huella_facil=<sha256 del chart>
+# huella_media=<sha256 del chart>
+# huella_dificil=<sha256 del chart>
+```
+
+`detalle` de cada fila `decision`: `recibida`, `fuente`, `seq`, `margen_ms` (tiempo que faltaba
+para que la primera nota del segmento pudiera aparecer; negativo = entrega tarde) y `aplicada`.
+
+Si la canción no cumple (falta un chart, BPM distinto, una nota larga cruza un corte o hay un
+evento Change Scroll Speed), la cabecera dice `modo_chart=fijo` con `error_intercambio=<motivo>`.
+En modo experimento, además, el bloque no empieza y el juego muestra el motivo.
+
+Claves de `sesion.txt` para pruebas: `intercambio=1` activa el intercambio sin modo experimento y
+`prueba_auto=1` registra la telemetría también con Botplay.
 
 ---
 
@@ -171,6 +227,8 @@ Antes de analizar un bloque:
 | Signo preservado | `timing_error_ms` tiene valores positivos **y** negativos |
 | Juicios coherentes | `max(abs(error))` por juicio no supera su ventana declarada en la cabecera |
 | Configuración correcta | `modo_experimento=1` y `condicion` es la esperada para ese bloque |
+| Charts correctos | `modo_chart=intercambio` y las tres `huella_*` coinciden con las del validador de charts |
+| Intercambio correcto | `verificar_intercambio.py` (repositorio FNF Motiv, carpeta `bio/`) pasa todas sus revisiones |
 
 La cuarta comprobación es la que detecta desalineaciones entre la telemetría y el motor de
 juicio. En las pruebas de validación: `sick` máx. 43 ms (ventana 45), `good` máx. 89 ms
