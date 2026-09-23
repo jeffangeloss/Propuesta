@@ -163,6 +163,7 @@ class PlayState extends MusicBeatState
 	// TESIS: intercambio de versiones del chart en cortes de 8 compases
 	public var intercambio:Intercambio = null;
 	var errorIntercambio:String = null;
+	var botplayRechazado:Bool = false; // TESIS: el aviso de Botplay en modo experimento sale una sola vez
 	public var eventNotes:Array<EventNote> = [];
 
 	public var camFollow:FlxObject;
@@ -970,6 +971,19 @@ class PlayState extends MusicBeatState
 			MusicBeatState.switchState(new FreeplayState());
 			return false;
 		}
+		// TESIS: en modo experimento el Botplay no juega el bloque en silencio; la sesión ya se leyó en generateSong
+		if (!startedCountdown && cpuControlled && Telemetry.experimentMode && !Telemetry.pruebaAuto)
+		{
+			if (!botplayRechazado)
+			{
+				botplayRechazado = true;
+				lime.app.Application.current.window.alert('El Botplay está activado. En modo experimento hay que apagarlo en Freeplay '
+					+ '(Ctrl, Gameplay Changers) antes de iniciar el bloque.', 'FNF Motiv');
+				persistentUpdate = false;
+				MusicBeatState.switchState(new FreeplayState());
+			}
+			return false;
+		}
 		// TESIS: fuera del modo experimento avisa el motivo y sigue con la versión única
 		if (errorIntercambio != null)
 		{
@@ -1257,8 +1271,8 @@ class PlayState extends MusicBeatState
 	{
 		startingSong = false;
 
-		// TESIS: abre el CSV del bloque
-		if(!cpuControlled || Telemetry.pruebaAuto) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate);
+		// TESIS: abre el CSV del bloque; la cabecera guarda el estado inicial del Botplay
+		if(!cpuControlled || Telemetry.pruebaAuto) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate, cpuControlled);
 
 		@:privateAccess
 		FlxG.sound.playMusic(inst._sound, 1, false);
@@ -1648,8 +1662,9 @@ class PlayState extends MusicBeatState
 
 			paused = false;
 
-			// TESIS: cierra el hueco abierto por la pausa
-			if(!cpuControlled) Telemetry.logResume(Conductor.songPosition, combo, songScore, health);
+			// TESIS: cierra el hueco abierto por la pausa. Sin mirar el Botplay: Telemetry solo lo registra
+			// si registró la pausa, así el par no queda cojo si el Botplay cambió en el menú de pausa
+			Telemetry.logResume(Conductor.songPosition, combo, songScore, health);
 
 			callOnScripts('onResume');
 			resetRPC(startTimer != null && startTimer.finished);

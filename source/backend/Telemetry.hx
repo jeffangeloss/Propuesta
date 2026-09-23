@@ -137,7 +137,8 @@ class Telemetry
 		#end
 	}
 
-	public static function startBlock(song:String, difficulty:String, playbackRate:Float):Void
+	/** TESIS: `botplay` es el estado del Botplay al abrir el bloque; va a la cabecera como `botplay_inicial`. */
+	public static function startBlock(song:String, difficulty:String, playbackRate:Float, botplay:Bool = false):Void
 	{
 		#if sys
 		if (!enabled) return;
@@ -183,6 +184,8 @@ class Telemetry
 		raw('# ventana_good_ms=' + ClientPrefs.data.goodWindow);
 		raw('# ventana_bad_ms=' + ClientPrefs.data.badWindow);
 		raw('# modo_experimento=' + (experimentMode ? '1' : '0'));
+		raw('# botplay_inicial=' + (botplay ? '1' : '0')); // TESIS
+		raw('# prueba_auto=' + (pruebaAuto ? '1' : '0')); // TESIS
 		raw('# piso_de_vida=' + (experimentMode ? Std.string(HEALTH_FLOOR) : 'sin piso, la muerte termina el bloque'));
 		raw('# umbral_recuperacion=' + RECOVERY_THRESHOLD);
 		raw('# failure_threshold marca la ENTRADA al fracaso y failure_recovered la salida.');
@@ -241,6 +244,14 @@ class Telemetry
 		#end
 	}
 
+	/** TESIS: cambio de Botplay desde el menú de pausa; `detalle` lleva `activo=0|1`. */
+	public static function logBotplay(songTimeMs:Float, activo:Bool, combo:Int, score:Int, health:Float):Void
+	{
+		#if sys
+		row('botplay', -1, '', null, combo, score, health, false, songTimeMs, '', -1, null, 'activo=' + (activo ? '1' : '0'));
+		#end
+	}
+
 	/** Nombre del bloque en curso: el nombre del CSV sin carpeta ni extensión. */
 	public static function bloqueActual():String
 	{
@@ -260,7 +271,10 @@ class Telemetry
 		#end
 	}
 
-	/** Solo se emite si hubo un `pause` previo: cerrar el game over también dispara closeSubState(). */
+	/**
+	 * Solo se emite si hubo un `pause` previo: cerrar el game over también dispara closeSubState().
+	 * TESIS: PlayState lo llama aunque el Botplay esté activo, así el par no queda cojo si se cambió en la pausa.
+	 */
 	public static function logResume(songTimeMs:Float, combo:Int, score:Int, health:Float):Void
 	{
 		#if sys
