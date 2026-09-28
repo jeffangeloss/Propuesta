@@ -1,7 +1,7 @@
 package backend;
 
 /**
- * TESIS: lógica pura del intercambio de versiones del chart.
+ * FNF-MOTIV [intercambio]: lógica pura del intercambio de versiones del chart.
  *
  * No importa nada de flixel ni de lime, así que se prueba con el intérprete de Haxe
  * (tesis/pruebas/correr_pruebas.sh) sin abrir el juego.

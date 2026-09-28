@@ -8,7 +8,7 @@ import objects.Note;
 import states.PlayState;
 
 /**
- * TESIS: intercambio de versiones del chart en cortes de 8 compases.
+ * FNF-MOTIV [intercambio]: intercambio de versiones del chart en cortes de 8 compases.
  *
  * Al cargar la canción arma las tres versiones (Fácil, Media, Difícil) y las parte en
  * segmentos. La fila de aparición del motor (unspawnNotes) arranca solo con el segmento 0 en

@@ -303,7 +303,7 @@ class PauseSubState extends MusicBeatSubstate
 					PlayState.instance.botplayTxt.visible = PlayState.instance.cpuControlled;
 					PlayState.instance.botplayTxt.alpha = 1;
 					PlayState.instance.botplaySine = 0;
-					// TESIS: el cambio de Botplay queda en el CSV del bloque, si hay uno abierto
+					// FNF-MOTIV [registro]: el cambio de Botplay queda en el CSV del bloque, si hay uno abierto
 					Telemetry.logBotplay(Conductor.songPosition, PlayState.instance.cpuControlled, PlayState.instance.combo,
 						PlayState.instance.songScore, PlayState.instance.health);
 				case 'Options':

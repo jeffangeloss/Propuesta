@@ -107,7 +107,7 @@ Salida en `export/release/macos/bin/PsychEngine.app` (ignorado por git).
 
 ## Modificaciones al código del engine
 
-Todas marcadas con el comentario `// TESIS` para poder localizarlas con `grep -rn "TESIS" source/`.
+Todas marcadas con el comentario `// FNF-MOTIV [función]`, donde la función es `registro`, `intercambio` o `modo experimento`, para poder localizarlas con `grep -rn "FNF-MOTIV" source/` o, por función, con `grep -rn "FNF-MOTIV \[registro\]" source/`.
 
 | Archivo | Cambio |
 |---|---|

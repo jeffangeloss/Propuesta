@@ -38,16 +38,16 @@ class Telemetry
 	 */
 	public static var experimentMode:Bool = false;
 
-	/** TESIS: `prueba_auto=1` registra la telemetría también en modo automático (botplay), solo para pruebas. */
+	/** FNF-MOTIV [registro]: `prueba_auto=1` registra la telemetría también en modo automático (botplay), solo para pruebas. */
 	public static var pruebaAuto:Bool = false;
 
-	/** TESIS: `intercambio=1` activa el intercambio de versiones aunque no haya modo experimento. */
+	/** FNF-MOTIV [intercambio]: `intercambio=1` activa el intercambio de versiones aunque no haya modo experimento. */
 	public static var intercambioForzado:Bool = false;
 
-	/** TESIS: líneas de cabecera que agrega el intercambio de versiones antes de abrir el bloque. */
+	/** FNF-MOTIV [intercambio]: líneas de cabecera que agrega el intercambio de versiones antes de abrir el bloque. */
 	public static var cabeceraExtra:Array<String> = [];
 
-	/** TESIS: un cuadro más largo que esto se registra como `cuadro_largo` (el doble de 60 cuadros por segundo). */
+	/** FNF-MOTIV [intercambio]: un cuadro más largo que esto se registra como `cuadro_largo` (el doble de 60 cuadros por segundo). */
 	public static inline var CUADRO_LARGO_MS:Float = 33;
 
 	/**
@@ -137,7 +137,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: `botplay` es el estado del Botplay al abrir el bloque; va a la cabecera como `botplay_inicial`. */
+	/** FNF-MOTIV [registro]: `botplay` es el estado del Botplay al abrir el bloque; va a la cabecera como `botplay_inicial`. */
 	public static function startBlock(song:String, difficulty:String, playbackRate:Float, botplay:Bool = false):Void
 	{
 		#if sys
@@ -184,8 +184,8 @@ class Telemetry
 		raw('# ventana_good_ms=' + ClientPrefs.data.goodWindow);
 		raw('# ventana_bad_ms=' + ClientPrefs.data.badWindow);
 		raw('# modo_experimento=' + (experimentMode ? '1' : '0'));
-		raw('# botplay_inicial=' + (botplay ? '1' : '0')); // TESIS
-		raw('# prueba_auto=' + (pruebaAuto ? '1' : '0')); // TESIS
+		raw('# botplay_inicial=' + (botplay ? '1' : '0')); // FNF-MOTIV [registro]
+		raw('# prueba_auto=' + (pruebaAuto ? '1' : '0')); // FNF-MOTIV [registro]
 		raw('# piso_de_vida=' + (experimentMode ? Std.string(HEALTH_FLOOR) : 'sin piso, la muerte termina el bloque'));
 		raw('# umbral_recuperacion=' + RECOVERY_THRESHOLD);
 		raw('# failure_threshold marca la ENTRADA al fracaso y failure_recovered la salida.');
@@ -210,7 +210,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: `sustain` = 1 marca el fallo de la cabeza de una nota larga (antes no se registraba). */
+	/** FNF-MOTIV [registro]: `sustain` = 1 marca el fallo de la cabeza de una nota larga (antes no se registraba). */
 	public static function logMiss(songTimeMs:Float, direction:Int, combo:Int, score:Int, health:Float, pressedWithoutNote:Bool, ?note:Note,
 			sustain:Bool = false):Void
 	{
@@ -220,7 +220,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: decisión aplicada al segmento que entra. `version` y `segmento` son los del segmento. */
+	/** FNF-MOTIV [intercambio]: decisión aplicada al segmento que entra. `version` y `segmento` son los del segmento. */
 	public static function logDecision(songTimeMs:Float, version:String, segmento:Int, detalle:String, combo:Int, score:Int, health:Float):Void
 	{
 		#if sys
@@ -228,7 +228,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: la canción cruzó un corte; `version` es la que empieza a sonar. */
+	/** FNF-MOTIV [intercambio]: la canción cruzó un corte; `version` es la que empieza a sonar. */
 	public static function logCorte(songTimeMs:Float, version:String, segmento:Int, combo:Int, score:Int, health:Float):Void
 	{
 		#if sys
@@ -236,7 +236,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: cuadro más largo que CUADRO_LARGO_MS, para la prueba de imperceptibilidad. */
+	/** FNF-MOTIV [intercambio]: cuadro más largo que CUADRO_LARGO_MS, para la prueba de imperceptibilidad. */
 	public static function logCuadroLargo(songTimeMs:Float, duracionMs:Float):Void
 	{
 		#if sys
@@ -244,7 +244,7 @@ class Telemetry
 		#end
 	}
 
-	/** TESIS: cambio de Botplay desde el menú de pausa; `detalle` lleva `activo=0|1`. */
+	/** FNF-MOTIV [registro]: cambio de Botplay desde el menú de pausa; `detalle` lleva `activo=0|1`. */
 	public static function logBotplay(songTimeMs:Float, activo:Bool, combo:Int, score:Int, health:Float):Void
 	{
 		#if sys
@@ -256,7 +256,7 @@ class Telemetry
 	public static function bloqueActual():String
 	{
 		#if sys
-		if (out == null) return ''; // TESIS: sin bloque abierto no hay decisiones que validar
+		if (out == null) return ''; // FNF-MOTIV [intercambio]: sin bloque abierto no hay decisiones que validar
 		#end
 		return currentFile == '' ? '' : haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(currentFile));
 	}
@@ -273,7 +273,7 @@ class Telemetry
 
 	/**
 	 * Solo se emite si hubo un `pause` previo: cerrar el game over también dispara closeSubState().
-	 * TESIS: PlayState lo llama aunque el Botplay esté activo, así el par no queda cojo si se cambió en la pausa.
+	 * FNF-MOTIV [registro]: PlayState lo llama aunque el Botplay esté activo, así el par no queda cojo si se cambió en la pausa.
 	 */
 	public static function logResume(songTimeMs:Float, combo:Int, score:Int, health:Float):Void
 	{
