@@ -2,7 +2,7 @@
 
 Se activa con `experimento=1` en `~/Documents/fnf-telemetria/sesion.txt`.
 
-**Los tres cambios que introduce alteran la tarea que enfrenta el participante y deben estar
+**Los cuatro cambios que introduce alteran la tarea que enfrenta el participante y deben estar
 escritos en la sección de método de la tesis.** No son detalles de implementación.
 
 ---
@@ -85,11 +85,56 @@ dificultad; omitida es un problema serio.
 
 ---
 
+## 4. Solo las cuatro flechas juegan las notas
+
+Todos los participantes juegan con ← ↓ ↑ → y con la mano derecha. A, S, W y D, que el motor trae
+como teclas alternas, y cualquier otra tecla no disparan notas ni cuentan como `miss_press`. El
+mando tampoco juega.
+
+**Por qué.** Decisión del 3 de octubre de 2026. La mano izquierda descansa quieta sobre la mesa
+con los sensores biométricos (el MAX30102 en la yema del índice, los electrodos del GSR y la IMU en
+el dorso). Una letra pulsada por esa mano, o rozada, no puede dejar en el CSV un acierto ni un
+`miss_press` ajenos a la tarea.
+
+**Nota de implementación.** No se modifica `ClientPrefs` ni el archivo de controles. Psych Engine
+guarda los controles del menú de opciones en `controls_v3.sol`, dentro del perfil de Windows de
+quien abre el juego (`C:\Users\<usuario>\AppData\Roaming\ShadowMario\PsychEngine\`), y al arrancar
+esos controles reemplazan a los de fábrica. Cambiar los valores por defecto no bastaría, porque la
+PC del IA LAB jugaría con lo que alguien haya guardado en ese perfil. En modo experimento
+`PlayState` toma el carril de una tabla fija (`source/backend/TeclasExperimento.hx`) y no consulta
+los controles guardados, igual que con el ghost tapping. Fuera del modo experimento el juego sigue
+usando los controles del menú.
+
+El motor lee las teclas de nota en tres lugares, que son `onKeyPress()` al pulsar,
+`onKeyRelease()` al soltar y `keysCheck()` mientras se sostiene una nota larga. Si se parchea solo
+el primero, una letra sigue sosteniendo las notas largas. Es otro fallo silencioso.
+
+### Otras teclas que no hacen nada durante el bloque
+
+| Tecla | Fuera del modo experimento | En modo experimento |
+|---|---|---|
+| R | Baja la vida a cero | Nada. Con el piso de vida registraría un `failure_threshold` que el participante no causó |
+| 7 y 8 | Abren el editor de charts y el de personajes | Nada. Cortarían el bloque a la mitad |
+| 1 y 2 (solo en el build de depuración) | Terminan la canción o la adelantan 10 s | Nada |
+| Enter y Esc (pausa) | Pausan | Nada (sección 1) |
+
+Las teclas de los menús (A, S, W y D además de las flechas, Ctrl, Espacio y Enter en Freeplay)
+siguen activas, porque el investigador maneja los menús. Durante el bloque ninguna tiene
+efecto, ya que la pausa y el game over no se abren. Las teclas de volumen (0, - y +) también siguen
+activas, lejos de la mano izquierda.
+
+**Complemento fuera del código.** La tecla Windows y Alt+Tab sacan el foco de la ventana, y el
+juego no puede bloquearlas. La mano izquierda descansa lejos del teclado y, si el teclado tiene
+bloqueo de la tecla Windows (modo juego), conviene activarlo.
+
+---
+
 ## Verificación antes de cada sesión
 
 | Comprobación | Cómo |
 |---|---|
 | Modo experimento activo | La cabecera del CSV dice `modo_experimento=1` |
+| Solo flechas | En una canción de prueba con `experimento=1`, A, S, W y D no iluminan ninguna flecha del jugador y ← ↓ ↑ → sí |
 | Identificación correcta | `participante` y `condicion` corresponden al bloque |
 | Sin canciones del juego base | El build de sesiones se compila **sin** `-DBASE_GAME_FILES` |
 | Audio calibrado | Offset verificado en esa máquina y esa salida de audio |

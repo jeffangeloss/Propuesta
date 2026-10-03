@@ -6,6 +6,7 @@ import backend.WeekData;
 import backend.Song;
 import backend.Rating;
 import backend.Intercambio; // FNF-MOTIV [intercambio]
+import backend.TeclasExperimento; // FNF-MOTIV [modo experimento]
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -1772,7 +1773,8 @@ class PlayState extends MusicBeatState
 			}
 		}
 
-		if(!endingSong && !inCutscene && allowDebugKeys)
+		// FNF-MOTIV [modo experimento]: en modo experimento los editores (7 y 8) no se abren; cortarían el bloque a la mitad
+		if(!endingSong && !inCutscene && allowDebugKeys && !Telemetry.experimentMode)
 		{
 			if (controls.justPressed('debug_1'))
 				openChartEditor();
@@ -1831,7 +1833,9 @@ class PlayState extends MusicBeatState
 		FlxG.watch.addQuick("stepShit", curStep);
 
 		// RESET = Quick Game Over Screen
-		if (!ClientPrefs.data.noReset && controls.RESET && canReset && !inCutscene && startedCountdown && !endingSong)
+		// FNF-MOTIV [modo experimento]: en modo experimento la R no hace nada. Está al alcance de la mano izquierda y, con
+		// el piso de vida, no termina la partida, así que registraría un cruce del umbral de fracaso que el participante no causó.
+		if (!ClientPrefs.data.noReset && !Telemetry.experimentMode && controls.RESET && canReset && !inCutscene && startedCountdown && !endingSong)
 		{
 			health = 0;
 			trace("RESET = True");
@@ -1926,7 +1930,7 @@ class PlayState extends MusicBeatState
 		}
 
 		#if debug
-		if(!endingSong && !startingSong) {
+		if(!endingSong && !startingSong && !Telemetry.experimentMode) { // FNF-MOTIV [modo experimento]: 1 y 2 saltarían parte del bloque
 			if (FlxG.keys.justPressed.ONE) {
 				KillNotes();
 				FlxG.sound.music.onComplete();
@@ -2797,9 +2801,11 @@ class PlayState extends MusicBeatState
 	{
 
 		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
+		// FNF-MOTIV [modo experimento]: en modo experimento solo las cuatro flechas juegan, sin importar los controles
+		// guardados en la máquina. El mando no juega, así que una flecha llega aunque antes se haya tocado un botón.
+		var key:Int = Telemetry.experimentMode ? TeclasExperimento.carril(eventKey) : getKeyFromEvent(keysArray, eventKey);
 
-		if (!controls.controllerMode)
+		if (!controls.controllerMode || Telemetry.experimentMode)
 		{
 			#if debug
 			//Prevents crash specifically on debug without needing to try catch shit
@@ -2886,8 +2892,9 @@ class PlayState extends MusicBeatState
 	private function onKeyRelease(event:KeyboardEvent):Void
 	{
 		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
-		if(!controls.controllerMode && key > -1) keyReleased(key);
+		// FNF-MOTIV [modo experimento]: igual que en onKeyPress, solo las flechas
+		var key:Int = Telemetry.experimentMode ? TeclasExperimento.carril(eventKey) : getKeyFromEvent(keysArray, eventKey);
+		if((!controls.controllerMode || Telemetry.experimentMode) && key > -1) keyReleased(key);
 	}
 
 	private function keyReleased(key:Int)
@@ -2928,15 +2935,30 @@ class PlayState extends MusicBeatState
 		var holdArray:Array<Bool> = [];
 		var pressArray:Array<Bool> = [];
 		var releaseArray:Array<Bool> = [];
-		for (key in keysArray)
+		// FNF-MOTIV [modo experimento]: las notas largas también se sostienen solo con las flechas. El mando no cuenta,
+		// y onKeyPress/onKeyRelease ya entregan las flechas, así que las ramas del mando de abajo no las repiten.
+		var soloFlechas:Bool = Telemetry.experimentMode;
+		if (soloFlechas)
 		{
-			holdArray.push(controls.pressed(key));
-			pressArray.push(controls.justPressed(key));
-			releaseArray.push(controls.justReleased(key));
+			for (tecla in TeclasExperimento.NOTAS)
+			{
+				holdArray.push(FlxG.keys.checkStatus(tecla, PRESSED));
+				pressArray.push(FlxG.keys.checkStatus(tecla, JUST_PRESSED));
+				releaseArray.push(FlxG.keys.checkStatus(tecla, JUST_RELEASED));
+			}
+		}
+		else
+		{
+			for (key in keysArray)
+			{
+				holdArray.push(controls.pressed(key));
+				pressArray.push(controls.justPressed(key));
+				releaseArray.push(controls.justReleased(key));
+			}
 		}
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
-		if(controls.controllerMode && pressArray.contains(true))
+		if(controls.controllerMode && !soloFlechas && pressArray.contains(true)) // FNF-MOTIV [modo experimento]
 			for (i in 0...pressArray.length)
 				if(pressArray[i] && strumsBlocked[i] != true)
 					keyPressed(i);
@@ -2969,7 +2991,7 @@ class PlayState extends MusicBeatState
 		}
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
-		if((controls.controllerMode || strumsBlocked.contains(true)) && releaseArray.contains(true))
+		if(((controls.controllerMode && !soloFlechas) || strumsBlocked.contains(true)) && releaseArray.contains(true)) // FNF-MOTIV [modo experimento]
 			for (i in 0...releaseArray.length)
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);

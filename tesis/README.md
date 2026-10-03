@@ -73,7 +73,7 @@ En macOS 27 hay que agregar `-DMACOSX_VER=27.0` a los dos comandos. hxcpp 4.3.2 
 del SDK leyendo la carpeta de SDKs y toma `MacOSX27.sdk`, que `xcrun` no reconoce como
 `macosx27`. Sin ese flag la compilación termina con `Could not create PCH`.
 
-Pruebas de la lógica del intercambio, sin abrir el juego:
+Pruebas de la lógica del intercambio y de las teclas del modo experimento, sin abrir el juego:
 
 ```bash
 ./tesis/pruebas/correr_pruebas.sh
@@ -103,7 +103,8 @@ Salida en `export/release/macos/bin/PsychEngine.app` (ignorado por git).
    de las sesiones**. Audífonos o parlantes **con cable**: el Bluetooth añade entre 100 y 300 ms
    de latencia variable y arruina la medición sin dar ninguna señal de que algo va mal.
 
-3. Jugar el bloque completo. Los CSV quedan en `~/Documents/fnf-telemetria/`.
+3. Jugar el bloque completo, solo con las flechas y la mano derecha. Con `experimento=1` las
+   letras no disparan notas. Los CSV quedan en `~/Documents/fnf-telemetria/`.
 
 ## Modificaciones al código del engine
 
@@ -113,7 +114,8 @@ Todas marcadas con el comentario `// FNF-MOTIV [función]`, donde la función es
 |---|---|
 | `source/backend/Telemetry.hx` | **Nuevo.** Módulo de registro completo |
 | `source/import.hx` | Añade `import backend.Telemetry` |
-| `source/states/PlayState.hx` | Error de timing con signo, 8 puntos de registro, bloqueo de pausa, ghost tapping y piso de vida |
+| `source/backend/TeclasExperimento.hx` | **Nuevo.** Teclas de nota fijas del modo experimento (las cuatro flechas) |
+| `source/states/PlayState.hx` | Error de timing con signo, 8 puntos de registro, bloqueo de pausa, ghost tapping, piso de vida, solo flechas y R y editores bloqueados en modo experimento |
 | `Project.xml` | `LUA_ALLOWED` y `DISCORD_ALLOWED` comentados |
 
 ### Notas para quien modifique el engine
@@ -123,6 +125,9 @@ Todas marcadas con el comentario `// FNF-MOTIV [función]`, donde la función es
 - **El ghost tapping está bloqueado en dos lugares**, no en uno: `keyPressed()` decide si
   `noteMissPress()` se llama siquiera, y esa función tiene su propia verificación. Hay que
   parchear ambas.
+- **Las teclas de nota se leen en tres lugares.** `onKeyPress()` al pulsar, `onKeyRelease()` al
+  soltar y `keysCheck()` mientras se sostiene una nota larga. En modo experimento los tres usan
+  `TeclasExperimento`; si se parchea solo el primero, una letra sigue sosteniendo las notas largas.
 - **Al desactivar defines desaparecen variables que parecen de uso general.** `storyDifficultyText`
   vive dentro de `#if DISCORD_ALLOWED`. Preferir siempre la fuente original del dato
   (`Difficulty.getString()`) antes que una variable de conveniencia declarada en un bloque condicional.

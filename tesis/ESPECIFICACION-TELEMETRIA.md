@@ -105,7 +105,7 @@ real y no solo aciertos.
 | `block_start` | Inicio del bloque. Primera fila |
 | `hit` | Nota acertada. Único con `juicio` y `timing_error_ms` |
 | `miss` | Nota que pasó sin ser tocada |
-| `miss_press` | Tecla pulsada sin nota que acertar. Solo si el ghost tapping está desactivado |
+| `miss_press` | Tecla pulsada sin nota que acertar. Solo si el ghost tapping está desactivado. En modo experimento solo cuentan las cuatro flechas |
 | `failure_threshold` | **Entrada** al estado de fracaso (vida ≤ 0). Solo en modo experimento |
 | `failure_recovered` | **Salida** del estado de fracaso (vida > umbral de recuperación) |
 | `pause` | Partida pausada. No debería aparecer en modo experimento |

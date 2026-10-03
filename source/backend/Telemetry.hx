@@ -34,6 +34,7 @@ class Telemetry
 	 * Modo experimento. Cuando está activo:
 	 *   - se bloquea la pausa durante la partida
 	 *   - se registran las teclas pulsadas sin nota (ignora ghostTapping)
+	 *   - FNF-MOTIV [modo experimento]: solo las cuatro flechas juegan las notas (TeclasExperimento), y R y los editores no hacen nada
 	 * Se activa poniendo `experimento=1` en sesion.txt. NO cambia las preferencias guardadas.
 	 */
 	public static var experimentMode:Bool = false;
