@@ -2,7 +2,7 @@
 
 Se actualiza al cerrar cada hito.
 
-**Última actualización:** 11 de agosto de 2026 — cierre del Hito 1.
+**Última actualización:** 22 de septiembre de 2026 — intercambio de versiones del chart.
 
 ---
 
@@ -33,7 +33,8 @@ asume, pero no altera el instrumento: la telemetría es la misma con cualquier e
 
 ## Hito 1 — Telemetría · TERMINADO
 
-Psych Engine 1.0.4 compilando nativo en arm64 y registrando siete tipos de evento por bloque.
+Psych Engine 1.0.4 compilando nativo en arm64 y registrando nueve tipos de evento por bloque
+(doce con el intercambio de versiones).
 
 - Error de timing **con signo**, capturado antes del `Math.abs()` del engine
 - Modo experimento configurable desde `sesion.txt` sin recompilar
@@ -98,12 +99,14 @@ picos, y la correlación da el desfase real y la deriva. Cero hardware extra.
 
 ### Hito 3 — Controlador adaptativo
 
-Basado en reglas, con umbrales declarados, ajustando velocidad de notas, ventanas de juicio y
-drenaje de vida — los tres parámetros modificables en runtime sin alterar el chart. Debe
-**registrar cada ajuste con marca de tiempo**: ese log es el dato de H4.
+Basado en reglas, con umbrales declarados. La única perilla es la **densidad del chart**: tres
+versiones pre-charteadas (Fácil, Media, Difícil) que se intercambian cada 8 compases. Velocidad,
+ventanas de juicio y drenaje de vida no cambian.
 
-Canal de control: Python escribe `params.json`, el juego lo lee cada N frames. Latencia ~100 ms,
-suficiente, y sin riesgo de red.
+El intercambio ya existe (`source/backend/Intercambio.hx`, ver ESPECIFICACION-TELEMETRIA.md). El
+canal de control es `decision.json`: Python lo escribe y el juego lo lee una vez, unos 2,25 s
+antes de cada corte. Cada decisión queda registrada en la telemetría (`decision` y `chart_cut`).
+Falta el controlador con sus reglas y umbrales.
 
 ### Hito 4 — Charts propios
 

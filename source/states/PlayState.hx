@@ -5,6 +5,8 @@ import backend.StageData;
 import backend.WeekData;
 import backend.Song;
 import backend.Rating;
+import backend.Intercambio; // FNF-MOTIV [intercambio]
+import backend.TeclasExperimento; // FNF-MOTIV [modo experimento]
 
 import flixel.FlxBasic;
 import flixel.FlxObject;
@@ -157,6 +159,12 @@ class PlayState extends MusicBeatState
 
 	public var notes:FlxTypedGroup<Note>;
 	public var unspawnNotes:Array<Note> = [];
+	var notasFantasma:Int = 0; // FNF-MOTIV [intercambio]: duplicados descartados por construirNotas
+
+	// FNF-MOTIV [intercambio]: intercambio de versiones del chart en cortes de 8 compases
+	public var intercambio:Intercambio = null;
+	var errorIntercambio:String = null;
+	var botplayRechazado:Bool = false; // FNF-MOTIV [modo experimento]: el aviso de Botplay en modo experimento sale una sola vez
 	public var eventNotes:Array<EventNote> = [];
 
 	public var camFollow:FlxObject;
@@ -955,6 +963,35 @@ class PlayState extends MusicBeatState
 
 	public function startCountdown()
 	{
+		// FNF-MOTIV [intercambio]: en modo experimento, sin las tres versiones válidas el bloque no empieza
+		if (errorIntercambio != null && Telemetry.experimentMode)
+		{
+			lime.app.Application.current.window.alert('No se puede iniciar el bloque: ' + errorIntercambio, 'FNF Motiv');
+			errorIntercambio = null;
+			persistentUpdate = false;
+			MusicBeatState.switchState(new FreeplayState());
+			return false;
+		}
+		// FNF-MOTIV [modo experimento]: en modo experimento el Botplay no juega el bloque en silencio; la sesión ya se leyó en generateSong
+		if (!startedCountdown && cpuControlled && Telemetry.experimentMode && !Telemetry.pruebaAuto)
+		{
+			if (!botplayRechazado)
+			{
+				botplayRechazado = true;
+				lime.app.Application.current.window.alert('El Botplay está activado. En modo experimento hay que apagarlo en Freeplay '
+					+ '(Ctrl, Gameplay Changers) antes de iniciar el bloque.', 'FNF Motiv');
+				persistentUpdate = false;
+				MusicBeatState.switchState(new FreeplayState());
+			}
+			return false;
+		}
+		// FNF-MOTIV [intercambio]: fuera del modo experimento avisa el motivo y sigue con la versión única
+		if (errorIntercambio != null)
+		{
+			lime.app.Application.current.window.alert('El intercambio no se activó y la canción sigue con la versión única: ' + errorIntercambio, 'FNF Motiv');
+			errorIntercambio = null;
+		}
+
 		if(startedCountdown) {
 			callOnScripts('onStartCountdown');
 			return false;
@@ -1235,8 +1272,8 @@ class PlayState extends MusicBeatState
 	{
 		startingSong = false;
 
-		// TESIS: abre el CSV del bloque
-		if(!cpuControlled) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate);
+		// FNF-MOTIV [registro]: abre el CSV del bloque; la cabecera guarda el estado inicial del Botplay
+		if(!cpuControlled || Telemetry.pruebaAuto) Telemetry.startBlock(SONG.song, Difficulty.getString(), playbackRate, cpuControlled);
 
 		@:privateAccess
 		FlxG.sound.playMusic(inst._sound, 1, false);
@@ -1276,6 +1313,7 @@ class PlayState extends MusicBeatState
 
 	private function generateSong():Void
 	{
+		Telemetry.loadSessionConfig(); // FNF-MOTIV [modo experimento]: la sesión se lee antes de armar el chart y del conteo
 		// FlxG.log.add(ChartParser.parse());
 		songSpeed = PlayState.SONG.speed;
 		songSpeedType = ClientPrefs.getGameplaySetting('scrolltype');
@@ -1335,8 +1373,32 @@ class PlayState extends MusicBeatState
 		}
 		catch(e:Dynamic) {}
 
+		// FNF-MOTIV [intercambio]: el bucle original vive ahora en construirNotas, para armar también Fácil y Difícil
+		construirNotas(PlayState.SONG.notes, false, unspawnNotes);
+		trace('["${SONG.song.toUpperCase()}" CHART INFO]: Ghost Notes Cleared: $notasFantasma');
+		for (event in songData.events) //Event Notes
+			for (i in 0...event[1].length)
+				makeEvent(event, i);
+
+		unspawnNotes.sort(sortByTime);
+
+		// FNF-MOTIV [intercambio]: intercambio de versiones del chart en cortes de 8 compases
+		intercambio = new Intercambio(this);
+		unspawnNotes = intercambio.preparar(songName, unspawnNotes);
+		errorIntercambio = intercambio.error;
+
+		generatedMusic = true;
+	}
+
+	/**
+	 * FNF-MOTIV [intercambio]: cuerpo original de generateSong, sin cambios de lógica, parametrizado para que el
+	 * intercambio arme también las versiones Fácil y Difícil. Con `soloJugador` omite las notas del
+	 * rival. Los duplicados se buscan solo dentro de `destino`, es decir, dentro de cada versión.
+	 */
+	public function construirNotas(sectionsData:Array<SwagSection>, soloJugador:Bool, ?destino:Array<Note>):Array<Note>
+	{
+		if (destino == null) destino = [];
 		var oldNote:Note = null;
-		var sectionsData:Array<SwagSection> = PlayState.SONG.notes;
 		var ghostNotesCaught:Int = 0;
 		var daBpm:Float = Conductor.bpm;
 	
@@ -1356,20 +1418,21 @@ class PlayState extends MusicBeatState
 					holdLength = 0.0;
 
 				var gottaHitNote:Bool = (songNotes[1] < totalColumns);
+				if (soloJugador && !gottaHitNote) continue; // FNF-MOTIV [intercambio]
 
 				if (i != 0) {
 					// CLEAR ANY POSSIBLE GHOST NOTES
-					for (evilNote in unspawnNotes) {
+					for (evilNote in destino) {
 						var matches: Bool = (noteColumn == evilNote.noteData && gottaHitNote == evilNote.mustPress && evilNote.noteType == noteType);
 						if (matches && Math.abs(spawnTime - evilNote.strumTime) < flixel.math.FlxMath.EPSILON) {
 							if (evilNote.tail.length > 0)
 								for (tail in evilNote.tail)
 								{
 									tail.destroy();
-									unspawnNotes.remove(tail);
+									destino.remove(tail);
 								}
 							evilNote.destroy();
-							unspawnNotes.remove(evilNote);
+							destino.remove(evilNote);
 							ghostNotesCaught++;
 							//continue;
 						}
@@ -1385,7 +1448,7 @@ class PlayState extends MusicBeatState
 				swagNote.noteType = noteType;
 	
 				swagNote.scrollFactor.set();
-				unspawnNotes.push(swagNote);
+				destino.push(swagNote);
 
 				var curStepCrochet:Float = 60 / daBpm * 1000 / 4.0;
 				final roundSus:Int = Math.round(swagNote.sustainLength / curStepCrochet);
@@ -1393,7 +1456,7 @@ class PlayState extends MusicBeatState
 				{
 					for (susNote in 0...roundSus)
 					{
-						oldNote = unspawnNotes[Std.int(unspawnNotes.length - 1)];
+						oldNote = destino[Std.int(destino.length - 1)];
 
 						var sustainNote:Note = new Note(spawnTime + (curStepCrochet * susNote), noteColumn, oldNote, true);
 						sustainNote.animSuffix = swagNote.animSuffix;
@@ -1402,7 +1465,7 @@ class PlayState extends MusicBeatState
 						sustainNote.noteType = swagNote.noteType;
 						sustainNote.scrollFactor.set();
 						sustainNote.parent = swagNote;
-						unspawnNotes.push(sustainNote);
+						destino.push(sustainNote);
 						swagNote.tail.push(sustainNote);
 
 						sustainNote.correctionOffset = swagNote.height / 2;
@@ -1452,13 +1515,8 @@ class PlayState extends MusicBeatState
 				oldNote = swagNote;
 			}
 		}
-		trace('["${SONG.song.toUpperCase()}" CHART INFO]: Ghost Notes Cleared: $ghostNotesCaught');
-		for (event in songData.events) //Event Notes
-			for (i in 0...event[1].length)
-				makeEvent(event, i);
-
-		unspawnNotes.sort(sortByTime);
-		generatedMusic = true;
+		notasFantasma += ghostNotesCaught;
+		return destino;
 	}
 
 	// called only once per different event (Used for precaching)
@@ -1605,8 +1663,9 @@ class PlayState extends MusicBeatState
 
 			paused = false;
 
-			// TESIS: cierra el hueco abierto por la pausa
-			if(!cpuControlled) Telemetry.logResume(Conductor.songPosition, combo, songScore, health);
+			// FNF-MOTIV [registro]: cierra el hueco abierto por la pausa. Sin mirar el Botplay: Telemetry solo lo registra
+			// si registró la pausa, así el par no queda cojo si el Botplay cambió en el menú de pausa
+			Telemetry.logResume(Conductor.songPosition, combo, songScore, health);
 
 			callOnScripts('onResume');
 			resetRPC(startTimer != null && startTimer.finished);
@@ -1704,7 +1763,7 @@ class PlayState extends MusicBeatState
 			botplayTxt.alpha = 1 - Math.sin((Math.PI * botplaySine) / 180);
 		}
 
-		// TESIS: en modo experimento la pausa queda bloqueada — pausar rompe la correspondencia
+		// FNF-MOTIV [modo experimento]: en modo experimento la pausa queda bloqueada — pausar rompe la correspondencia
 		// entre reloj de pared (biometría) y tiempo de canción (telemetría).
 		if (controls.PAUSE && startedCountdown && canPause && !Telemetry.experimentMode)
 		{
@@ -1714,7 +1773,8 @@ class PlayState extends MusicBeatState
 			}
 		}
 
-		if(!endingSong && !inCutscene && allowDebugKeys)
+		// FNF-MOTIV [modo experimento]: en modo experimento los editores (7 y 8) no se abren; cortarían el bloque a la mitad
+		if(!endingSong && !inCutscene && allowDebugKeys && !Telemetry.experimentMode)
 		{
 			if (controls.justPressed('debug_1'))
 				openChartEditor();
@@ -1773,12 +1833,20 @@ class PlayState extends MusicBeatState
 		FlxG.watch.addQuick("stepShit", curStep);
 
 		// RESET = Quick Game Over Screen
-		if (!ClientPrefs.data.noReset && controls.RESET && canReset && !inCutscene && startedCountdown && !endingSong)
+		// FNF-MOTIV [modo experimento]: en modo experimento la R no hace nada. Está al alcance de la mano izquierda y, con
+		// el piso de vida, no termina la partida, así que registraría un cruce del umbral de fracaso que el participante no causó.
+		if (!ClientPrefs.data.noReset && !Telemetry.experimentMode && controls.RESET && canReset && !inCutscene && startedCountdown && !endingSong)
 		{
 			health = 0;
 			trace("RESET = True");
 		}
 		doDeathCheck();
+
+		// FNF-MOTIV [intercambio]: entrega el segmento siguiente en su plazo y registra cada corte
+		if (intercambio != null && generatedMusic && !paused) intercambio.actualizar(Conductor.songPosition);
+		// FNF-MOTIV [intercambio]: cuadros largos durante el bloque, para la prueba de imperceptibilidad
+		if (!startingSong && !paused && !endingSong && generatedMusic && elapsed / FlxG.timeScale * 1000 > Telemetry.CUADRO_LARGO_MS)
+			Telemetry.logCuadroLargo(Conductor.songPosition, elapsed / FlxG.timeScale * 1000);
 
 		if (unspawnNotes[0] != null)
 		{
@@ -1862,7 +1930,7 @@ class PlayState extends MusicBeatState
 		}
 
 		#if debug
-		if(!endingSong && !startingSong) {
+		if(!endingSong && !startingSong && !Telemetry.experimentMode) { // FNF-MOTIV [modo experimento]: 1 y 2 saltarían parte del bloque
 			if (FlxG.keys.justPressed.ONE) {
 				KillNotes();
 				FlxG.sound.music.onComplete();
@@ -1902,7 +1970,7 @@ class PlayState extends MusicBeatState
 	{
 		value = FlxMath.roundDecimal(value, 5); //Fix Float imprecision
 
-		// TESIS: salida del estado de fracaso. Con histéresis: hace falta recuperarse por encima
+		// FNF-MOTIV [modo experimento]: salida del estado de fracaso. Con histéresis: hace falta recuperarse por encima
 		// de RECOVERY_THRESHOLD para que un cruce posterior cuente como episodio nuevo.
 		if (Telemetry.inFailure && value > Telemetry.RECOVERY_THRESHOLD)
 			Telemetry.logFailureRecovered(Conductor.songPosition, combo, songScore, value);
@@ -1929,7 +1997,7 @@ class PlayState extends MusicBeatState
 		persistentDraw = true;
 		paused = true;
 
-		// TESIS: marca el inicio del hueco entre reloj de pared y tiempo de canción
+		// FNF-MOTIV [registro]: marca el inicio del hueco entre reloj de pared y tiempo de canción
 		if(!cpuControlled) Telemetry.logPause(Conductor.songPosition, combo, songScore, health);
 
 		if(FlxG.sound.music != null) {
@@ -1997,7 +2065,7 @@ class PlayState extends MusicBeatState
 	public var isDead:Bool = false; //Don't mess with this on Lua!!!
 	public var gameOverTimer:FlxTimer;
 	function doDeathCheck(?skipHealthCheck:Bool = false) {
-		// TESIS: en modo experimento el bloque nunca se corta. Se registra el cruce del umbral
+		// FNF-MOTIV [modo experimento]: en modo experimento el bloque nunca se corta. Se registra el cruce del umbral
 		// de fracaso y se le pone piso a la vida, para que la exposición sea igual entre condiciones
 		// y las ventanas de HRV queden completas. La barra queda visualmente vacía: la presión
 		// percibida se mantiene.
@@ -2426,7 +2494,7 @@ class PlayState extends MusicBeatState
 	public var transitioning = false;
 	public function endSong()
 	{
-		// TESIS: cierra el CSV del bloque
+		// FNF-MOTIV [registro]: cierra el CSV del bloque
 		Telemetry.endBlock(Conductor.songPosition, songHits, songMisses, songScore, ratingPercent, health);
 
 		//Should kill you if you tried to cheat
@@ -2580,7 +2648,7 @@ class PlayState extends MusicBeatState
 
 	private function popUpScore(note:Note = null):Void
 	{
-		// TESIS: error de timing CON SIGNO, capturado antes del Math.abs().
+		// FNF-MOTIV [registro]: error de timing CON SIGNO, capturado antes del Math.abs().
 		// negativo = adelantado, positivo = atrasado (convención estándar de sincronización sensoriomotora).
 		var signedNoteDiff:Float = -(note.strumTime - Conductor.songPosition + ClientPrefs.data.ratingOffset);
 
@@ -2624,9 +2692,9 @@ class PlayState extends MusicBeatState
 			}
 		}
 
-		// TESIS: registro del acierto
-		if(!cpuControlled)
-			Telemetry.logHit(Conductor.songPosition, note.noteData, daRating.name, signedNoteDiff, combo, songScore, health, note.isSustainNote);
+		// FNF-MOTIV [registro]: registro del acierto
+		if(!cpuControlled || Telemetry.pruebaAuto)
+			Telemetry.logHit(Conductor.songPosition, note.noteData, daRating.name, signedNoteDiff, combo, songScore, health, note.isSustainNote, note);
 
 		var uiFolder:String = "";
 		var antialias:Bool = ClientPrefs.data.antialiasing;
@@ -2733,9 +2801,11 @@ class PlayState extends MusicBeatState
 	{
 
 		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
+		// FNF-MOTIV [modo experimento]: en modo experimento solo las cuatro flechas juegan, sin importar los controles
+		// guardados en la máquina. El mando no juega, así que una flecha llega aunque antes se haya tocado un botón.
+		var key:Int = Telemetry.experimentMode ? TeclasExperimento.carril(eventKey) : getKeyFromEvent(keysArray, eventKey);
 
-		if (!controls.controllerMode)
+		if (!controls.controllerMode || Telemetry.experimentMode)
 		{
 			#if debug
 			//Prevents crash specifically on debug without needing to try catch shit
@@ -2785,7 +2855,7 @@ class PlayState extends MusicBeatState
 		}
 		else
 		{
-			// TESIS: segunda compuerta de ghostTapping. Sin esto, noteMissPress() ni siquiera
+			// FNF-MOTIV [modo experimento]: segunda compuerta de ghostTapping. Sin esto, noteMissPress() ni siquiera
 			// se llama y las teclas pulsadas sin nota no dejan rastro.
 			if (ClientPrefs.data.ghostTapping && !Telemetry.experimentMode)
 				callOnScripts('onGhostTap', [key]);
@@ -2822,8 +2892,9 @@ class PlayState extends MusicBeatState
 	private function onKeyRelease(event:KeyboardEvent):Void
 	{
 		var eventKey:FlxKey = event.keyCode;
-		var key:Int = getKeyFromEvent(keysArray, eventKey);
-		if(!controls.controllerMode && key > -1) keyReleased(key);
+		// FNF-MOTIV [modo experimento]: igual que en onKeyPress, solo las flechas
+		var key:Int = Telemetry.experimentMode ? TeclasExperimento.carril(eventKey) : getKeyFromEvent(keysArray, eventKey);
+		if((!controls.controllerMode || Telemetry.experimentMode) && key > -1) keyReleased(key);
 	}
 
 	private function keyReleased(key:Int)
@@ -2864,15 +2935,30 @@ class PlayState extends MusicBeatState
 		var holdArray:Array<Bool> = [];
 		var pressArray:Array<Bool> = [];
 		var releaseArray:Array<Bool> = [];
-		for (key in keysArray)
+		// FNF-MOTIV [modo experimento]: las notas largas también se sostienen solo con las flechas. El mando no cuenta,
+		// y onKeyPress/onKeyRelease ya entregan las flechas, así que las ramas del mando de abajo no las repiten.
+		var soloFlechas:Bool = Telemetry.experimentMode;
+		if (soloFlechas)
 		{
-			holdArray.push(controls.pressed(key));
-			pressArray.push(controls.justPressed(key));
-			releaseArray.push(controls.justReleased(key));
+			for (tecla in TeclasExperimento.NOTAS)
+			{
+				holdArray.push(FlxG.keys.checkStatus(tecla, PRESSED));
+				pressArray.push(FlxG.keys.checkStatus(tecla, JUST_PRESSED));
+				releaseArray.push(FlxG.keys.checkStatus(tecla, JUST_RELEASED));
+			}
+		}
+		else
+		{
+			for (key in keysArray)
+			{
+				holdArray.push(controls.pressed(key));
+				pressArray.push(controls.justPressed(key));
+				releaseArray.push(controls.justReleased(key));
+			}
 		}
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
-		if(controls.controllerMode && pressArray.contains(true))
+		if(controls.controllerMode && !soloFlechas && pressArray.contains(true)) // FNF-MOTIV [modo experimento]
 			for (i in 0...pressArray.length)
 				if(pressArray[i] && strumsBlocked[i] != true)
 					keyPressed(i);
@@ -2905,7 +2991,7 @@ class PlayState extends MusicBeatState
 		}
 
 		// TO DO: Find a better way to handle controller inputs, this should work for now
-		if((controls.controllerMode || strumsBlocked.contains(true)) && releaseArray.contains(true))
+		if(((controls.controllerMode && !soloFlechas) || strumsBlocked.contains(true)) && releaseArray.contains(true)) // FNF-MOTIV [modo experimento]
 			for (i in 0...releaseArray.length)
 				if(releaseArray[i] || strumsBlocked[i] == true)
 					keyReleased(i);
@@ -2926,7 +3012,7 @@ class PlayState extends MusicBeatState
 
 	function noteMissPress(direction:Int = 1):Void //You pressed a key when there was no notes to press for this key
 	{
-		// TESIS: en modo experimento las teclas pulsadas sin nota SÍ cuentan como error.
+		// FNF-MOTIV [modo experimento]: en modo experimento las teclas pulsadas sin nota SÍ cuentan como error.
 		// No se toca ClientPrefs para no contaminar las preferencias guardadas.
 		if(ClientPrefs.data.ghostTapping && !Telemetry.experimentMode) return; //fuck it
 
@@ -2960,6 +3046,9 @@ class PlayState extends MusicBeatState
 				// i mean its fair :p -Crow
 				subtract *= note.tail.length + 1;
 				// i think it would be fair if damage multiplied based on how long the sustain is -[REDACTED]
+
+				// FNF-MOTIV [registro]: el motor sale justo abajo sin llegar a logMiss; sin esto el fallo no se registraría
+				Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, false, note, true);
 			}
 
 			if (note.missed)
@@ -2996,8 +3085,8 @@ class PlayState extends MusicBeatState
 		totalPlayed++;
 		RecalculateRating(true);
 
-		// TESIS: registro del error. note == null significa tecla pulsada sin nota que acertar.
-		Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, note == null);
+		// FNF-MOTIV [registro]: registro del error. note == null significa tecla pulsada sin nota que acertar.
+		Telemetry.logMiss(Conductor.songPosition, direction, combo, songScore, health, note == null, note);
 
 		// play character anims
 		var char:Character = boyfriend;
@@ -3192,6 +3281,8 @@ class PlayState extends MusicBeatState
 	}
 
 	override function destroy() {
+		if (intercambio != null) intercambio.destruir(); // FNF-MOTIV [intercambio]
+		Telemetry.closeBlock(); // FNF-MOTIV [registro]: un bloque abandonado no queda abierto para la corrida siguiente
 		if (psychlua.CustomSubstate.instance != null)
 		{
 			closeSubState();
