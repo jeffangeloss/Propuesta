@@ -129,6 +129,19 @@ class IntercambioLogica
 		};
 	}
 
+	/** Condiciones que acepta el modo experimento en sesion.txt, escritas exactamente así. */
+	public static final CONDICIONES:Array<String> = ['adaptativa', 'estatica'];
+
+	/**
+	 * Devuelve null si la condición es 'adaptativa' o 'estatica' y, si no, el motivo del rechazo.
+	 * No normaliza mayúsculas ni tildes, porque una errata como «Estatica» aplicaría las decisiones.
+	 */
+	public static function errorCondicion(condicion:Null<String>):Null<String>
+	{
+		if (condicion != null && CONDICIONES.contains(condicion)) return null;
+		return 'la condición «' + condicion + '» de sesion.txt no es válida; debe ser ' + CONDICIONES.join(' o ');
+	}
+
 	/** Campo `detalle` del CSV: pares clave=valor separados por punto y coma. */
 	public static function detalle(pares:Array<Array<String>>):String
 		return [for (p in pares) p[0] + '=' + StringTools.replace(StringTools.replace(p[1], ';', ' '), ',', ' ')].join(';');

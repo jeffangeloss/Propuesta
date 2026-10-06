@@ -80,6 +80,15 @@ class TestIntercambio
 		ok(L.detalle([['recibida', 'sube'], ['margen_ms', '412']]) == 'recibida=sube;margen_ms=412', 'detalle');
 		ok(L.detalle([['fuente', 'a;b,c']]) == 'fuente=a b c', 'detalle sin separadores');
 
+		// condición de sesion.txt: solo «adaptativa» o «estatica», escritas exactamente así
+		ok(L.errorCondicion('adaptativa') == null, 'condición adaptativa válida');
+		ok(L.errorCondicion('estatica') == null, 'condición estatica válida');
+		for (mala in ['Estatica', 'estática', 'ESTATICA', 'Adaptativa', 'adaptativo', 'practica', '', ' estatica', 'estatica ', 'adaptativa;estatica', null])
+			ok(L.errorCondicion(mala) != null, 'condición rechazada: «' + mala + '»');
+		var motivo = L.errorCondicion('practica');
+		ok(motivo.indexOf('practica') >= 0 && motivo.indexOf('adaptativa') >= 0 && motivo.indexOf('estatica') >= 0,
+			'el motivo nombra la condición recibida y las dos permitidas');
+
 		Sys.println((total - fallas) + ' de ' + total + ' pruebas pasan');
 		Sys.exit(fallas == 0 ? 0 : 1);
 	}

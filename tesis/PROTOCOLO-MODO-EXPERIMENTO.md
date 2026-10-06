@@ -129,13 +129,44 @@ bloqueo de la tecla Windows (modo juego), conviene activarlo.
 
 ---
 
+## 5. La condición de sesion.txt se valida al iniciar el bloque
+
+En modo experimento, el campo `condicion` solo admite `adaptativa` o `estatica`, escritas exactamente
+así, en minúscula y sin tilde. Cualquier otro valor (por ejemplo `Estatica`, `estática`, `practica`
+o un campo vacío) se rechaza antes de abrir el bloque.
+
+**Por qué.** El juego decide si aplica las decisiones del controlador adaptativo de dificultad
+comparando la condición con `estatica`. Sin validación, una errata aplicaba las decisiones en un
+bloque que debía ser de control, corrompía la manipulación experimental y no dejaba ningún aviso. La
+condición también forma parte del nombre del CSV y de la cabecera, así que la errata habría llegado
+hasta el análisis.
+
+**Qué hace el juego.** La validación ocupa el mismo lugar que la del intercambio de versiones y
+reutiliza su vía de rechazo. `Intercambio.preparar` llama a `IntercambioLogica.errorCondicion` antes
+de leer los charts. Si la condición no es válida, el intercambio queda inactivo y el motivo pasa a
+`error`, y al iniciar la cuenta regresiva `PlayState` muestra un aviso con ese motivo y vuelve a
+Freeplay. Como el CSV se abre en `startSong`, que nunca se alcanza, el rechazo no deja archivo. La
+comparación es estricta y no normaliza mayúsculas ni tildes, porque corregir en silencio ocultaría
+la errata al investigador.
+
+**Fuera del modo experimento.** Con `intercambio=1` y sin `experimento=1`, la condición inválida
+desactiva el intercambio, el juego avisa el motivo y la canción sigue con la versión única, igual que
+con cualquier otro fallo del intercambio. Sin ninguno de los dos campos la validación no interviene.
+
+**Prueba.** `tesis/pruebas/TestIntercambio.hx`, que corre `tesis/pruebas/correr_pruebas.sh`, verifica
+que las dos condiciones válidas pasan, que once variantes erróneas (mayúsculas, tildes, espacios,
+vacío, nulo, otras palabras y un valor doble) se rechazan y que el motivo nombra la condición recibida
+y las dos permitidas.
+
+---
+
 ## Verificación antes de cada sesión
 
 | Comprobación | Cómo |
 |---|---|
 | Modo experimento activo | La cabecera del CSV dice `modo_experimento=1` |
 | Solo flechas | En una canción de prueba con `experimento=1`, A, S, W y D no iluminan ninguna flecha del jugador y ← ↓ ↑ → sí |
-| Identificación correcta | `participante` y `condicion` corresponden al bloque |
+| Identificación correcta | `participante` y `condicion` corresponden al bloque; `condicion` es exactamente `adaptativa` o `estatica` (si no, el juego avisa y vuelve a Freeplay sin CSV) |
 | Sin canciones del juego base | El build de sesiones se compila **sin** `-DBASE_GAME_FILES` |
 | Audio calibrado | Offset verificado en esa máquina y esa salida de audio |
 | Salida con cable | Nunca Bluetooth: 100–300 ms de latencia variable |

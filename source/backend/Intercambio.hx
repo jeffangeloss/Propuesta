@@ -50,6 +50,10 @@ class Intercambio
 		Telemetry.cabeceraExtra = ['# modo_chart=fijo'];
 		if (!Telemetry.experimentMode && !Telemetry.intercambioForzado) return notasMedia;
 
+		// FNF-MOTIV [modo experimento]: una condición mal escrita no puede aplicar decisiones por descarte
+		var errorCond:String = IntercambioLogica.errorCondicion(Telemetry.condition);
+		if (errorCond != null) return fallar(errorCond, notasMedia);
+
 		if (Difficulty.getString(PlayState.storyDifficulty, false).toLowerCase() != 'normal')
 			return fallar('el intercambio necesita la dificultad Normal (Media) como chart maestro', notasMedia);
 
